@@ -1,17 +1,19 @@
 {
   "name": "group-4",
   "version": "1.0.0",
-  "description": "",
+  "description": "A simple REST API for managing students",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "node --test"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/superpaooey/Group-4.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "superpaooey",
   "license": "ISC",
   "type": "module",
   "bugs": {
