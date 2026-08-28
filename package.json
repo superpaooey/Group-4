@@ -1,0 +1,27 @@
+{
+  "name": "group-4",
+  "version": "1.0.0",
+  "description": "A simple REST API for managing students",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superpaooey/Group-4.git"
+  },
+  "keywords": [],
+  "author": "superpaooey",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/superpaooey/Group-4/issues"
+  },
+  "homepage": "https://github.com/superpaooey/Group-4#readme",
+  "dependencies": {
+    "express": "^5.2.1",
+    "nodemon": "^3.1.14"
+  }
+}
