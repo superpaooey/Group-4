@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import app from './src/index.js';
+import app from './app.js';
 
 test('GET /students returns the current student list', async () => {
   const server = app.listen(0);
