@@ -6,10 +6,10 @@ Student API project built with Node.js and Express.
 
 ```text
 .
-├── app.js
 ├── server.js
 ├── app.test.js
 └── src/
+    ├── app.js
     ├── config/
     ├── controllers/
     ├── middleware/
