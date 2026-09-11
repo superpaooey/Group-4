@@ -21,7 +21,9 @@
   },
   "homepage": "https://github.com/superpaooey/Group-4#readme",
   "dependencies": {
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "pg": "^8.23.0"
   }
 }
