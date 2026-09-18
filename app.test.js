@@ -7,12 +7,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const databaseAvailable = Boolean(
-  process.env.DATABASE_URL ||
-    (process.env.DB_HOST && process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD)
-);
-const maybeTest = databaseAvailable ? test : test.skip;
-
 const createDbPath = async () => {
   const dir = path.join(process.cwd(), 'data');
   await fs.mkdir(dir, { recursive: true });
@@ -23,16 +17,22 @@ const createDbPath = async () => {
   return dbPath;
 };
 
-const runStudentRequest = (dbPath, method, payload) => {
+const runRequest = (dbPath, route, method, payload, token) => {
   const script = `
     import app from './src/app.js';
     const server = app.listen(0, async () => {
       const { port } = server.address();
-      const response = await fetch('http://127.0.0.1:' + port + '/students', {
+      const headers = { 'Content-Type': 'application/json' };
+      if (${JSON.stringify(Boolean(token))}) {
+        headers.Authorization = 'Bearer ' + ${JSON.stringify(token)};
+      }
+
+      const response = await fetch('http://127.0.0.1:' + port + ${JSON.stringify(route)}, {
         method: ${JSON.stringify(method)},
-        headers: { 'Content-Type': 'application/json' },
-        body: ${JSON.stringify(JSON.stringify(payload))}
+        headers,
+        body: payload ? JSON.stringify(payload) : undefined,
       });
+
       const text = await response.text();
       console.log(JSON.stringify({ status: response.status, body: text }));
       server.close();
@@ -41,24 +41,61 @@ const runStudentRequest = (dbPath, method, payload) => {
 
   return spawnSync(process.execPath, ['--input-type=module', '-e', script], {
     cwd: process.cwd(),
-    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/group4', DB_PATH: dbPath },
+    env: {
+      ...process.env,
+      DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/group4',
+      DB_PATH: dbPath,
+      USE_SQLITE: 'true',
+    },
     encoding: 'utf8',
   });
 };
 
-maybeTest('student data persists across app restarts', async () => {
-  const dbPath = await createDbPath();
+const parseResponseJson = (stdout) => {
+  const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const jsonLine = [...lines].reverse().find((line) => line.startsWith('{'));
 
-  const createResult = runStudentRequest(dbPath, 'POST', { name: 'student2' });
+  if (!jsonLine) {
+    throw new Error(`No JSON response found in child process output: ${stdout}`);
+  }
+
+  return JSON.parse(jsonLine);
+};
+
+test('student data persists across app restarts', async () => {
+  const dbPath = await createDbPath();
+  const email = `student-${Date.now()}@example.com`;
+  const password = 'Password123';
+
+  const registerResult = runRequest(dbPath, '/auth/register', 'POST', { name: 'Student One', email, password });
+  assert.equal(registerResult.status, 0, registerResult.stderr || registerResult.stdout);
+
+  const registerPayload = parseResponseJson(registerResult.stdout);
+  assert.equal(registerPayload.status, 201);
+
+  const loginResult = runRequest(dbPath, '/auth/login', 'POST', { email, password });
+  assert.equal(loginResult.status, 0, loginResult.stderr || loginResult.stdout);
+
+  const loginPayload = parseResponseJson(loginResult.stdout);
+  assert.equal(loginPayload.status, 200, loginResult.stdout);
+  assert.ok(loginPayload.body, 'Login response should include a body');
+
+  const loginBody = JSON.parse(loginPayload.body);
+  assert.ok(loginBody.token, 'Login response should include an access token');
+  assert.ok(loginBody.refreshToken, 'Login response should include a refresh token');
+
+  const createResult = runRequest(dbPath, '/students', 'POST', { name: 'student2' }, loginBody.token);
   assert.equal(createResult.status, 0, createResult.stderr || createResult.stdout);
 
-  const listResult = runStudentRequest(dbPath, 'GET');
-  assert.equal(listResult.status, 0, listResult.stderr || listResult.stdout);
+  const createPayload = parseResponseJson(createResult.stdout);
+  assert.equal(createPayload.status, 201, createResult.stdout);
 
-  const createPayload = JSON.parse(createResult.stdout.trim());
-  const listPayload = JSON.parse(listResult.stdout.trim());
+  const restartResult = runRequest(dbPath, '/students', 'GET', undefined, loginBody.token);
+  assert.equal(restartResult.status, 0, restartResult.stderr || restartResult.stdout);
 
-  assert.equal(createPayload.status, 201);
-  assert.equal(listPayload.status, 200);
-  assert.ok(JSON.parse(listPayload.body).some((student) => student.name === 'student2'));
+  const restartPayload = parseResponseJson(restartResult.stdout);
+  assert.equal(restartPayload.status, 200, restartResult.stdout);
+
+  const students = JSON.parse(restartPayload.body);
+  assert.ok(students.some((student) => student.name === 'student2'));
 });

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Group 4 Auth Tester</title>
+    <style>
+      :root {
+        --bg: #111827;
+        --card: #1f2937;
+        --panel: #0f172a;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --primary: #60a5fa;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --border: #374151;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 0 20px;
+      }
+
+      h1 {
+        margin-bottom: 30px;
+        font-size: 2rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+
+      .card h2 {
+        margin-top: 0;
+        font-size: 1.2rem;
+      }
+
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      input {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        background: var(--primary);
+        color: #06121f;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #334155;
+        color: var(--text);
+      }
+
+      button.danger {
+        background: var(--danger);
+        color: white;
+      }
+
+      .status {
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 8px;
+        background: #0b1323;
+        border: 1px solid var(--border);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .status.success { border-color: rgba(34, 197, 94, 0.6); }
+      .status.error { border-color: rgba(239, 68, 68, 0.7); }
+
+      .token-box {
+        margin-top: 12px;
+        padding: 12px;
+        background: #020817;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        word-break: break-word;
+        font-size: 0.82rem;
+      }
+
+      .students {
+        margin-top: 20px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+
+      ul {
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Group 4 Auth & Student API Tester</h1>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Register</h2>
+          <form id="registerForm">
+            <label>
+              Name
+              <input name="name" type="text" value="Tester" required />
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" value="tester@example.com" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" value="Password123" required />
+            </label>
+            <button type="submit">Register</button>
+          </form>
+          <div id="registerStatus" class="status">Ready</div>
+        </section>
+
+        <section class="card">
+          <h2>Sign In</h2>
+          <form id="loginForm">
+            <label>
+              Email
+              <input name="email" type="email" value="tester@example.com" required />
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" value="Password123" required />
+            </label>
+            <button type="submit">Sign In</button>
+          </form>
+          <div id="loginStatus" class="status">Not signed in</div>
+          <div class="token-box">
+            <strong>Access Token:</strong>
+            <div id="accessToken">Not available</div>
+          </div>
+          <div class="token-box">
+            <strong>Refresh Token:</strong>
+            <div id="refreshToken">Not available</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Session</h2>
+          <button id="refreshTokenBtn" class="secondary" type="button">Refresh Access Token</button>
+          <button id="logoutBtn" class="danger" type="button" style="margin-top: 12px;">Logout</button>
+          <div id="sessionStatus" class="status">No session</div>
+        </section>
+
+        <section class="card">
+          <h2>Students</h2>
+          <button id="getStudentsBtn" type="button">Get Students</button>
+          <form id="addStudentForm" style="margin-top: 12px;">
+            <label>
+              Student Name
+              <input id="studentName" type="text" placeholder="New student" required />
+            </label>
+            <button type="submit">Add Student</button>
+          </form>
+          <div id="studentsStatus" class="status">No results yet</div>
+        </section>
+      </div>
+
+      <div class="students">
+        <h2>Student List</h2>
+        <ul id="studentList">
+          <li>Not loaded yet</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE = '/';
+      const accessTokenEl = document.getElementById('accessToken');
+      const refreshTokenEl = document.getElementById('refreshToken');
+      const studentListEl = document.getElementById('studentList');
+
+      const setStatus = (elementId, message, type = '') => {
+        const el = document.getElementById(elementId);
+        el.textContent = message;
+        el.className = 'status';
+        if (type) el.classList.add(type);
+      };
+
+      const saveTokens = ({ token, refreshToken }) => {
+        if (token) localStorage.setItem('accessToken', token);
+        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+        renderTokens();
+      };
+
+      const renderTokens = () => {
+        const access = localStorage.getItem('accessToken');
+        const refresh = localStorage.getItem('refreshToken');
+
+        accessTokenEl.textContent = access || 'Not available';
+        refreshTokenEl.textContent = refresh || 'Not available';
+      };
+
+      const getAuthHeaders = () => {
+        const token = localStorage.getItem('accessToken');
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      };
+
+      const apiRequest = async (url, options = {}) => {
+        const response = await fetch(url, {
+          headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+          ...options,
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        const body = contentType.includes('application/json') ? await response.json() : await response.text();
+
+        if (!response.ok) {
+          throw new Error(typeof body === 'string' ? body : (body.message || JSON.stringify(body)));
+        }
+
+        return body;
+      };
+
+      document.getElementById('registerForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const form = event.currentTarget;
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        try {
+          const result = await apiRequest('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+
+          setStatus('registerStatus', JSON.stringify(result, null, 2), 'success');
+        } catch (error) {
+          setStatus('registerStatus', error.message, 'error');
+        }
+      });
+
+      document.getElementById('loginForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const form = event.currentTarget;
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        try {
+          const result = await apiRequest('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+
+          saveTokens({ token: result.token, refreshToken: result.refreshToken });
+          setStatus('loginStatus', `Signed in as ${result.user.email}`, 'success');
+        } catch (error) {
+          setStatus('loginStatus', error.message, 'error');
+        }
+      });
+
+      document.getElementById('refreshTokenBtn').addEventListener('click', async () => {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          setStatus('sessionStatus', 'No refresh token available.', 'error');
+          return;
+        }
+
+        try {
+          const result = await apiRequest('/auth/refresh', {
+            method: 'POST',
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          saveTokens({ token: result.token, refreshToken: refreshToken });
+          setStatus('sessionStatus', 'Access token refreshed successfully.', 'success');
+        } catch (error) {
+          setStatus('sessionStatus', error.message, 'error');
+        }
+      });
+
+      document.getElementById('logoutBtn').addEventListener('click', async () => {
+        const token = localStorage.getItem('accessToken');
+        const refreshToken = localStorage.getItem('refreshToken');
+
+        if (!token) {
+          setStatus('sessionStatus', 'No active session to logout.', 'error');
+          return;
+        }
+
+        try {
+          await apiRequest('/auth/logout', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ refreshToken }),
+          });
+
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          renderTokens();
+          setStatus('sessionStatus', 'Logged out successfully.', 'success');
+        } catch (error) {
+          setStatus('sessionStatus', error.message, 'error');
+        }
+      });
+
+      document.getElementById('getStudentsBtn').addEventListener('click', async () => {
+        try {
+          const students = await apiRequest('/students', {
+            method: 'GET',
+            headers: getAuthHeaders(),
+          });
+
+          const list = Array.isArray(students) ? students : [];
+          studentListEl.innerHTML = list.length
+            ? list.map((student) => `<li>${student.name}</li>`).join('')
+            : '<li>No students available</li>';
+          setStatus('studentsStatus', `Loaded ${list.length} student(s).`, 'success');
+        } catch (error) {
+          setStatus('studentsStatus', error.message, 'error');
+        }
+      });
+
+      document.getElementById('addStudentForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const name = document.getElementById('studentName').value.trim();
+
+        if (!name) {
+          setStatus('studentsStatus', 'Student name is required.', 'error');
+          return;
+        }
+
+        try {
+          const result = await apiRequest('/students', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ name }),
+          });
+
+          setStatus('studentsStatus', `Created student: ${result.name}`, 'success');
+          document.getElementById('studentName').value = '';
+          document.getElementById('getStudentsBtn').click();
+        } catch (error) {
+          setStatus('studentsStatus', error.message, 'error');
+        }
+      });
+
+      renderTokens();
+    </script>
+  </body>
+</html>
