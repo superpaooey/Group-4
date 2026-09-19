@@ -30,7 +30,7 @@ const runRequest = (dbPath, route, method, payload, token) => {
       const response = await fetch('http://127.0.0.1:' + port + ${JSON.stringify(route)}, {
         method: ${JSON.stringify(method)},
         headers,
-        body: payload ? JSON.stringify(payload) : undefined,
+        body: ${JSON.stringify(payload === undefined ? undefined : JSON.stringify(payload))},
       });
 
       const text = await response.text();
