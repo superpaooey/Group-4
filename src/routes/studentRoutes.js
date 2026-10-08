@@ -11,10 +11,10 @@ import {
 const router = express.Router();
 
 router.get('/', listStudents);
-router.get('/:index', getStudent);
+router.get('/:id', getStudent);
 router.post('/', createStudent);
-router.patch('/:index', updateStudent);
-router.delete('/:index', removeStudent);
+router.patch('/:id', updateStudent);
+router.delete('/:id', removeStudent);
 router.delete('/', removeAllStudents);
 
 export default router;

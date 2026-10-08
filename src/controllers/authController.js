@@ -3,18 +3,27 @@ import jwt from 'jsonwebtoken';
 import { createUser, getUserByEmail } from '../models/userModel.js';
 import tokenService from '../services/tokenService.js';
 import JWT_SECRET from '../config/auth.js';
+import {
+  validateLoginInput,
+  validateRefreshTokenInput,
+  validateRegisterInput,
+} from '../validations/authValidation.js';
 
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const REFRESH_EXPIRES_DAYS = Number(process.env.REFRESH_EXPIRES_DAYS || 7);
 
 export const register = async (req, res) => {
-  const { name, email, password } = req.body ?? {};
+  const input = req.body ?? {};
+  const validationError = validateRegisterInput(input);
 
-  if (!name || !email || !password) {
-    return res.status(400).send({ message: 'Name, email and password are required' });
+  if (validationError) {
+    return res.status(400).send({ message: validationError });
   }
 
-  const existing = await getUserByEmail(email.toLowerCase());
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const { password } = input;
+  const existing = await getUserByEmail(email);
 
   if (existing) {
     return res.status(409).send({ message: 'Email already registered' });
@@ -27,13 +36,16 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { email, password } = req.body ?? {};
+  const input = req.body ?? {};
+  const validationError = validateLoginInput(input);
 
-  if (!email || !password) {
-    return res.status(400).send({ message: 'Email and password are required' });
+  if (validationError) {
+    return res.status(400).send({ message: validationError });
   }
 
-  const user = await getUserByEmail(email.toLowerCase());
+  const email = input.email.trim().toLowerCase();
+  const { password } = input;
+  const user = await getUserByEmail(email);
 
   if (!user) {
     return res.status(401).send({ message: 'Invalid credentials' });
@@ -77,9 +89,14 @@ export const signin = login;
 export const signout = logout;
 
 export const refresh = async (req, res) => {
-  const { refreshToken } = req.body ?? {};
+  const input = req.body ?? {};
+  const validationError = validateRefreshTokenInput(input);
 
-  if (!refreshToken) return res.status(400).send({ message: 'Missing refresh token' });
+  if (validationError) {
+    return res.status(400).send({ message: validationError });
+  }
+
+  const { refreshToken } = input;
 
   const stored = await tokenService.getRefreshToken(refreshToken);
 

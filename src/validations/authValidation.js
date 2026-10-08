@@ -1,10 +1,12 @@
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
 export const validateRegisterInput = ({ name, email, password }) => {
   if (!name || typeof name !== 'string' || !name.trim()) {
     return 'Name is required.';
   }
 
-  if (!email || typeof email !== 'string' || !email.trim()) {
-    return 'Email is required.';
+  if (!email || typeof email !== 'string' || !isValidEmail(email)) {
+    return 'A valid email is required.';
   }
 
   if (!password || typeof password !== 'string' || password.length < 6) {
@@ -15,8 +17,8 @@ export const validateRegisterInput = ({ name, email, password }) => {
 };
 
 export const validateLoginInput = ({ email, password }) => {
-  if (!email || typeof email !== 'string' || !email.trim()) {
-    return 'Email is required.';
+  if (!email || typeof email !== 'string' || !isValidEmail(email)) {
+    return 'A valid email is required.';
   }
 
   if (!password || typeof password !== 'string' || password.length < 6) {

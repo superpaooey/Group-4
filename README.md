@@ -63,7 +63,7 @@ The API runs on port 3000 by default.
 
 ## API Documentation
 
-The OpenAPI 3.0 definition is in [`docs/openapi.yaml`](docs/openapi.yaml). Import it into Swagger Editor or another OpenAPI-compatible viewer. Students routes use a zero-based position as `{index}` and require a bearer access token.
+The OpenAPI 3.0 definition is in [`docs/openapi.yaml`](docs/openapi.yaml). Import it into Swagger Editor or another OpenAPI-compatible viewer. Student item routes use the database primary key as `{id}` and require a bearer access token.
 
 Run the automated tests with:
 

@@ -17,29 +17,56 @@ const createDbPath = async () => {
   return dbPath;
 };
 
-const runRequest = (dbPath, route, method, payload, token) => {
+const runRequests = (dbPath, steps, initialResults = {}) => {
   const script = `
     import app from './src/app.js';
+    const results = ${JSON.stringify(initialResults)};
+    const steps = ${JSON.stringify(steps)};
+    const resolvePath = (path) => path.split('.').reduce((value, key) => value?.[key], results);
+    const resolveValue = (value) => {
+      if (typeof value === 'string') {
+        return value.replace(/\\{([^}]+)\\}/g, (_, path) => String(resolvePath(path) ?? ''));
+      }
+      if (Array.isArray(value)) return value.map(resolveValue);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveValue(item)]));
+      }
+      return value;
+    };
+
     const server = app.listen(0, async () => {
       const { port } = server.address();
-      const headers = { 'Content-Type': 'application/json' };
-      if (${JSON.stringify(Boolean(token))}) {
-        headers.Authorization = 'Bearer ' + ${JSON.stringify(token)};
+      try {
+        for (const step of steps) {
+          const headers = { 'Content-Type': 'application/json' };
+          if (step.tokenFrom) {
+            headers.Authorization = 'Bearer ' + resolvePath(step.tokenFrom);
+          }
+
+          const payload = resolveValue(step.body);
+          const response = await fetch('http://127.0.0.1:' + port + resolveValue(step.route), {
+            method: step.method,
+            headers,
+            body: payload === undefined ? undefined : JSON.stringify(payload),
+          });
+
+          const text = await response.text();
+          let body = text;
+          try { body = JSON.parse(text); } catch {}
+          results[step.key] = { status: response.status, body };
+        }
+
+        console.log(JSON.stringify(results));
+      } catch (error) {
+        console.error(error);
+        process.exitCode = 1;
+      } finally {
+        server.close();
       }
-
-      const response = await fetch('http://127.0.0.1:' + port + ${JSON.stringify(route)}, {
-        method: ${JSON.stringify(method)},
-        headers,
-        body: ${JSON.stringify(payload === undefined ? undefined : JSON.stringify(payload))},
-      });
-
-      const text = await response.text();
-      console.log(JSON.stringify({ status: response.status, body: text }));
-      server.close();
     });
   `;
 
-  return spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -49,7 +76,14 @@ const runRequest = (dbPath, route, method, payload, token) => {
       USE_SQLITE: 'true',
     },
     encoding: 'utf8',
+    timeout: 30000,
   });
+
+  if (result.error) {
+    result.stderr += `\n${result.error.message}`;
+  }
+
+  return result;
 };
 
 const parseResponseJson = (stdout) => {
@@ -67,36 +101,52 @@ test('student data persists across app restarts', async () => {
   const dbPath = await createDbPath();
   const email = `student-${Date.now()}@example.com`;
   const password = 'Password123';
+  const firstSession = runRequests(dbPath, [
+    { key: 'invalidRegister', route: '/auth/register', method: 'POST', body: { name: 'Student One', email: 'invalid-email', password } },
+    { key: 'register', route: '/auth/register', method: 'POST', body: { name: 'Student One', email, password } },
+    { key: 'invalidLogin', route: '/auth/login', method: 'POST', body: { email: 42, password: 42 } },
+    { key: 'login', route: '/auth/login', method: 'POST', body: { email, password } },
+    { key: 'unauthenticatedList', route: '/students', method: 'GET' },
+    { key: 'refresh', route: '/auth/refresh', method: 'POST', body: { refreshToken: '{login.body.refreshToken}' } },
+    { key: 'missingRefresh', route: '/auth/refresh', method: 'POST', body: {} },
+    { key: 'invalidCreate', route: '/students', method: 'POST', tokenFrom: 'login.body.token', body: { name: '   ' } },
+    { key: 'create', route: '/students', method: 'POST', tokenFrom: 'login.body.token', body: { name: 'student2' } },
+    { key: 'update', route: '/students/{create.body.id}', method: 'PATCH', tokenFrom: 'login.body.token', body: { name: 'updated student' } },
+    { key: 'invalidUpdate', route: '/students/{create.body.id}', method: 'PATCH', tokenFrom: 'login.body.token', body: { name: '  ' } },
+    { key: 'list', route: '/students', method: 'GET', tokenFrom: 'login.body.token' },
+  ]);
+  assert.equal(firstSession.status, 0, firstSession.stderr || firstSession.stdout);
 
-  const registerResult = runRequest(dbPath, '/auth/register', 'POST', { name: 'Student One', email, password });
-  assert.equal(registerResult.status, 0, registerResult.stderr || registerResult.stdout);
+  const firstResults = parseResponseJson(firstSession.stdout);
+  assert.equal(firstResults.invalidRegister.status, 400);
+  assert.equal(firstResults.register.status, 201);
+  assert.equal(firstResults.invalidLogin.status, 400);
+  assert.equal(firstResults.login.status, 200);
+  assert.equal(firstResults.unauthenticatedList.status, 401);
+  assert.equal(firstResults.refresh.status, 200);
+  assert.equal(firstResults.missingRefresh.status, 400);
+  assert.equal(firstResults.invalidCreate.status, 400);
+  assert.equal(firstResults.create.status, 201);
+  assert.ok(Number.isInteger(firstResults.create.body.id));
+  assert.equal(firstResults.update.status, 200);
+  assert.equal(firstResults.invalidUpdate.status, 400);
+  assert.ok(firstResults.list.body.some((student) => student.id === firstResults.create.body.id && student.name === 'updated student'));
 
-  const registerPayload = parseResponseJson(registerResult.stdout);
-  assert.equal(registerPayload.status, 201);
+  const secondSession = runRequests(dbPath, [
+    { key: 'getAfterRestart', route: '/students/{create.body.id}', method: 'GET', tokenFrom: 'login.body.token' },
+    { key: 'delete', route: '/students/{create.body.id}', method: 'DELETE', tokenFrom: 'login.body.token' },
+    { key: 'missingStudent', route: '/students/{create.body.id}', method: 'GET', tokenFrom: 'login.body.token' },
+    { key: 'logout', route: '/auth/logout', method: 'POST', tokenFrom: 'login.body.token', body: { refreshToken: '{login.body.refreshToken}' } },
+    { key: 'revokedToken', route: '/students', method: 'GET', tokenFrom: 'login.body.token' },
+    { key: 'revokedRefresh', route: '/auth/refresh', method: 'POST', body: { refreshToken: '{login.body.refreshToken}' } },
+  ], firstResults);
+  assert.equal(secondSession.status, 0, secondSession.stderr || secondSession.stdout);
 
-  const loginResult = runRequest(dbPath, '/auth/login', 'POST', { email, password });
-  assert.equal(loginResult.status, 0, loginResult.stderr || loginResult.stdout);
-
-  const loginPayload = parseResponseJson(loginResult.stdout);
-  assert.equal(loginPayload.status, 200, loginResult.stdout);
-  assert.ok(loginPayload.body, 'Login response should include a body');
-
-  const loginBody = JSON.parse(loginPayload.body);
-  assert.ok(loginBody.token, 'Login response should include an access token');
-  assert.ok(loginBody.refreshToken, 'Login response should include a refresh token');
-
-  const createResult = runRequest(dbPath, '/students', 'POST', { name: 'student2' }, loginBody.token);
-  assert.equal(createResult.status, 0, createResult.stderr || createResult.stdout);
-
-  const createPayload = parseResponseJson(createResult.stdout);
-  assert.equal(createPayload.status, 201, createResult.stdout);
-
-  const restartResult = runRequest(dbPath, '/students', 'GET', undefined, loginBody.token);
-  assert.equal(restartResult.status, 0, restartResult.stderr || restartResult.stdout);
-
-  const restartPayload = parseResponseJson(restartResult.stdout);
-  assert.equal(restartPayload.status, 200, restartResult.stdout);
-
-  const students = JSON.parse(restartPayload.body);
-  assert.ok(students.some((student) => student.name === 'student2'));
+  const secondResults = parseResponseJson(secondSession.stdout);
+  assert.equal(secondResults.getAfterRestart.status, 200);
+  assert.equal(secondResults.delete.status, 200);
+  assert.equal(secondResults.missingStudent.status, 404);
+  assert.equal(secondResults.logout.status, 200);
+  assert.equal(secondResults.revokedToken.status, 401);
+  assert.equal(secondResults.revokedRefresh.status, 401);
 });

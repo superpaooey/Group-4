@@ -1,12 +1,17 @@
 import {
   getAllStudents,
   addStudent,
-  getStudentByIndex,
-  updateStudentAtIndex,
-  deleteStudentAtIndex,
+  getStudentById,
+  updateStudentById,
+  deleteStudentById,
   clearStudents,
-  studentCount,
 } from '../models/studentModel.js';
+import { validateStudentData } from '../validations/studentValidation.js';
+
+const parseStudentId = (value) => {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+};
 
 export const listStudents = async (request, response) => {
   response.send(await getAllStudents());
@@ -14,9 +19,10 @@ export const listStudents = async (request, response) => {
 
 export const createStudent = async (request, response) => {
   const newStudent = request.body ?? {};
+  const validationError = validateStudentData(newStudent);
 
-  if (!newStudent.name || typeof newStudent.name !== 'string') {
-    return response.status(400).send({ message: 'Student name is required' });
+  if (validationError) {
+    return response.status(400).send({ message: validationError });
   }
 
   const createdStudent = await addStudent(newStudent);
@@ -24,14 +30,19 @@ export const createStudent = async (request, response) => {
 };
 
 export const updateStudent = async (request, response) => {
-  const studentIndex = Number(request.params.index);
+  const studentId = parseStudentId(request.params.id);
   const updatedStudentData = request.body ?? {};
+  const validationError = validateStudentData(updatedStudentData);
 
-  if (Number.isNaN(studentIndex) || studentIndex < 0 || studentIndex >= (await studentCount())) {
-    return response.status(404).send({ message: 'Student not found' });
+  if (!studentId) {
+    return response.status(400).send({ message: 'Student ID must be a positive integer' });
   }
 
-  const updatedStudent = await updateStudentAtIndex(studentIndex, updatedStudentData);
+  if (validationError) {
+    return response.status(400).send({ message: validationError });
+  }
+
+  const updatedStudent = await updateStudentById(studentId, updatedStudentData);
 
   if (!updatedStudent) {
     return response.status(404).send({ message: 'Student not found' });
@@ -41,13 +52,17 @@ export const updateStudent = async (request, response) => {
 };
 
 export const removeStudent = async (request, response) => {
-  const studentIndex = Number(request.params.index);
+  const studentId = parseStudentId(request.params.id);
 
-  if (Number.isNaN(studentIndex) || studentIndex < 0 || studentIndex >= (await studentCount())) {
+  if (!studentId) {
+    return response.status(400).send({ message: 'Student ID must be a positive integer' });
+  }
+
+  const deletedStudent = await deleteStudentById(studentId);
+  if (!deletedStudent) {
     return response.status(404).send({ message: 'Student not found' });
   }
 
-  const deletedStudent = await deleteStudentAtIndex(studentIndex);
   response.send({ deletedStudent });
 };
 
@@ -57,10 +72,15 @@ export const removeAllStudents = async (request, response) => {
 };
 
 export const getStudent = async (request, response) => {
-  const studentIndex = Number(request.params.index);
-  const student = await getStudentByIndex(studentIndex);
+  const studentId = parseStudentId(request.params.id);
 
-  if (student === undefined) {
+  if (!studentId) {
+    return response.status(400).send({ message: 'Student ID must be a positive integer' });
+  }
+
+  const student = await getStudentById(studentId);
+
+  if (!student) {
     return response.status(404).send({ message: 'Student not found' });
   }
 
