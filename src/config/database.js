@@ -39,8 +39,38 @@ const sqliteSchema = `
   );
 `;
 
-let sqliteEnabled = process.env.USE_SQLITE === 'true' || process.env.NODE_ENV === 'test' || (!process.env.DATABASE_URL && !process.env.DB_HOST);
-let sqliteDb = sqliteEnabled ? null : null;
+const postgresSchema = `
+  CREATE TABLE IF NOT EXISTS students (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS token_blacklist (
+    id SERIAL PRIMARY KEY,
+    token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
+const sqliteEnabled = process.env.USE_SQLITE === 'true' || process.env.NODE_ENV === 'test' || (!process.env.DATABASE_URL && !process.env.DB_HOST);
+let sqliteDb = null;
 
 const initializeSqlite = () => {
   if (sqliteDb) {
@@ -56,7 +86,6 @@ const initializeSqlite = () => {
     sqliteDb.prepare("INSERT INTO students (name) VALUES ('student1')").run();
   }
 
-  sqliteEnabled = true;
   return sqliteDb;
 };
 
@@ -101,31 +130,29 @@ const pool = {
       return sqliteQuery(sql, params);
     }
 
-    try {
-      return await postgresPool.query(sql, params);
-    } catch (error) {
-      sqliteEnabled = true;
-      return sqliteQuery(sql, params);
-    }
+    return postgresPool.query(sql, params);
   },
   async connect() {
     if (sqliteEnabled) {
       return sqliteConnect();
     }
 
-    try {
-      return await postgresPool.connect();
-    } catch (error) {
-      sqliteEnabled = true;
-      initializeSqlite();
-      return sqliteConnect();
-    }
+    return postgresPool.connect();
   },
 };
 
 export default pool;
 
 export const ensureDatabase = async () => {
+  if (!sqliteEnabled) {
+    await postgresPool.query(postgresSchema);
+    const result = await postgresPool.query('SELECT COUNT(*) AS count FROM students');
+    if (Number(result.rows[0].count) === 0) {
+      await postgresPool.query("INSERT INTO students (name) VALUES ('student1')");
+    }
+    return;
+  }
+
   const db = initializeSqlite();
 
   const count = db.prepare('SELECT COUNT(*) AS count FROM students').get();
