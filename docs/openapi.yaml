@@ -1,0 +1,224 @@
+openapi: 3.0.3
+info:
+  title: Group 4 Student API
+  version: 1.0.0
+  description: Student CRUD API with JWT authentication.
+servers:
+  - url: http://localhost:3000
+paths:
+  /auth/register:
+    post:
+      summary: Register a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Invalid registration data
+        '409':
+          description: Email already registered
+  /auth/login:
+    post:
+      summary: Sign in and issue access and refresh tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, refreshToken, user]
+                properties:
+                  token:
+                    type: string
+                  refreshToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+  /auth/refresh:
+    post:
+      summary: Issue a new access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Access token issued
+        '401':
+          description: Invalid or expired refresh token
+  /auth/logout:
+    post:
+      summary: Revoke the access token and optionally the refresh token
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Logged out
+        '400':
+          description: Missing access token
+  /students:
+    get:
+      summary: List students
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Student list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Student'
+        '401':
+          description: Missing or invalid access token
+    post:
+      summary: Create a student
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInput'
+      responses:
+        '201':
+          description: Student created
+        '400':
+          description: Student name is required
+        '401':
+          description: Missing or invalid access token
+    delete:
+      summary: Delete all students
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All students deleted
+        '401':
+          description: Missing or invalid access token
+  /students/{index}:
+    parameters:
+      - name: index
+        in: path
+        required: true
+        description: Zero-based position in the ordered student list
+        schema:
+          type: integer
+          minimum: 0
+    get:
+      summary: Get a student by position
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Student found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '404':
+          description: Student not found
+    patch:
+      summary: Update a student by position
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentInput'
+      responses:
+        '200':
+          description: Student updated
+        '404':
+          description: Student not found
+    delete:
+      summary: Delete a student by position
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Student deleted
+        '404':
+          description: Student not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    StudentInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+    Student:
+      type: object
+      properties:
+        name:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email

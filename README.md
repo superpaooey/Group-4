@@ -42,17 +42,15 @@ A Node.js and Express student API using PostgreSQL for persistent storage.
 
 ## Database Setup
 
-Create a local PostgreSQL database and copy the example file:
+Copy the example configuration file and set your local PostgreSQL credentials and a unique JWT secret:
 
 ```bash
-copy .env.example .env
+cp .env.example .env
 ```
 
-Then update the `.env` file with your local PostgreSQL credentials:
+On Windows PowerShell, use `Copy-Item .env.example .env`. Then create the `group4` PostgreSQL database and update `DATABASE_URL` in `.env`. Never commit `.env` or real credentials.
 
-```env
-DATABASE_URL=postgresql://postgres:100719@localhost:5432/group4
-```
+For local SQLite development instead, comment out `DATABASE_URL` and set `USE_SQLITE=true`. SQLite is also used automatically in tests.
 
 ## Run the Project
 
@@ -62,6 +60,16 @@ npm start
 ```
 
 The API runs on port 3000 by default.
+
+## API Documentation
+
+The OpenAPI 3.0 definition is in [`docs/openapi.yaml`](docs/openapi.yaml). Import it into Swagger Editor or another OpenAPI-compatible viewer. Students routes use a zero-based position as `{index}` and require a bearer access token.
+
+Run the automated tests with:
+
+```bash
+npm test
+```
 
 ## Authentication
 
@@ -79,7 +87,8 @@ Authorization: Bearer <token>
 
 Notes:
 - Refresh tokens and blacklisted tokens are persisted in the database.
-- The default `JWT_SECRET` and DB credentials should be set in your `.env`.
+- `JWT_SECRET` is required; the server will not start without it.
+- Do not commit `.env`, database files, access tokens, or refresh tokens.
 
 
 

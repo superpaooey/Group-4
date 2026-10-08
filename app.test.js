@@ -44,6 +44,7 @@ const runRequest = (dbPath, route, method, payload, token) => {
     env: {
       ...process.env,
       DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/group4',
+      JWT_SECRET: 'test-only-secret',
       DB_PATH: dbPath,
       USE_SQLITE: 'true',
     },

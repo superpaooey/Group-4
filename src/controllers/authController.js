@@ -2,8 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createUser, getUserByEmail } from '../models/userModel.js';
 import tokenService from '../services/tokenService.js';
+import JWT_SECRET from '../config/auth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const REFRESH_EXPIRES_DAYS = Number(process.env.REFRESH_EXPIRES_DAYS || 7);
 

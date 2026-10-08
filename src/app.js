@@ -19,4 +19,23 @@ app.get('/', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/students', authMiddleware, studentRoutes);
 
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  const status = Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+  if (status === 500) {
+    console.error(err);
+  }
+
+  res.status(status).json({
+    message: status === 500 ? 'Internal server error' : err.message,
+  });
+});
+
 export default app;
